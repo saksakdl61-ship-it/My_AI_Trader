@@ -1,108 +1,47 @@
-# main.py
-# 이 스크립트는 AI 트레이딩 시스템의 중앙 관제 시스템 역할을 하며,
-# 설정 파일에서 필요한 정보를 불러와 텔레그램 라이브 모드를 시작합니다.
-
 import os
-import configparser
-import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+import strategy_generator
+import ai_backtester
+import result_analyzer
 
-def setup_logging():
-    """로깅 설정을 초기화합니다."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-    )
+def run_project_automation():
+    """
+    AI 트레이딩 프로젝트의 전체 워크플로우를 자동화하는 메인 함수.
+    전략 생성, 백테스팅, 결과 분석을 순서대로 실행합니다.
+    """
+    print("--- [프로젝트 자동화 시작] ---")
 
-def load_config(file_path):
-    """
-    지정된 경로의 설정 파일을 읽어옵니다.
-    
-    Args:
-        file_path (str): 설정 파일의 경로.
-    
-    Returns:
-        configparser.ConfigParser: 설정 객체.
-    """
-    if not os.path.exists(file_path):
-        logging.error(f"오류: '{file_path}' 파일을 찾을 수 없습니다. 파일을 확인해주세요.")
-        return None
-        
-    config = configparser.ConfigParser()
+    # 1단계: 트레이딩 전략 생성
     try:
-        config.read(file_path, encoding='utf-8')
+        print("\n[1/3] 새로운 AI 전략을 생성하고 있습니다...")
+        generator = strategy_generator.StrategyGenerator()
+        generator.generate_strategy()
+        print("✅ 전략 생성 완료.")
     except Exception as e:
-        logging.error(f"오류: '{file_path}' 파일 읽기 오류: {e}")
-        return None
-        
-    return config
+        print(f"❌ 전략 생성 중 오류가 발생했습니다: {e}")
+        return  # 오류 발생 시 프로세스 중단
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/start 명령어를 처리하는 핸들러."""
-    user_name = update.effective_user.first_name if update.effective_user else "사용자"
-    logging.info(f"명령어 감지: /start (보낸 사람: {user_name}, ID: {update.effective_chat.id})")
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=f"안녕하세요, {user_name}님! AI 트레이딩 봇이 시작되었습니다. 필요한 명령을 입력해주세요."
-    )
+    # 2단계: 생성된 전략으로 백테스팅 실행
+    try:
+        print("\n[2/3] 생성된 전략으로 백테스팅을 시작합니다...")
+        backtester = ai_backtester.AIBacktester()
+        backtester.run_backtest()
+        print("✅ 백테스팅 완료.")
+    except Exception as e:
+        print(f"❌ 백테스팅 중 오류가 발생했습니다: {e}")
+        return # 오류 발생 시 프로세스 중단
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """모든 텍스트 메시지를 처리하는 핸들러."""
-    if update.message and update.message.text:
-        logging.info(f"받은 메시지: {update.message.text} (보낸 사람: {update.effective_user.first_name})")
-        
-        if not update.message.text.startswith('/'):
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"받은 메시지: {update.message.text}"
-            )
+    # 3단계: 백테스팅 결과 분석
+    try:
+        print("\n[3/3] 백테스팅 결과를 분석하고 최종 보고서를 생성합니다...")
+        analyzer = result_analyzer.ResultAnalyzer()
+        analyzer.analyze_results()
+        print("✅ 분석 완료. 최종 보고서가 생성되었습니다.")
+    except Exception as e:
+        print(f"❌ 결과 분석 중 오류가 발생했습니다: {e}")
+        return # 오류 발생 시 프로세스 중단
 
-def main():
-    """메인 실행 함수."""
-    setup_logging()
-    
-    config_file = "config_home.ini"
-    config = load_config(config_file)
-    
-    if config is None:
-        return
-        
-    logging.info("🚀 중앙 관제 시스템 (텔레그램 라이브 모드)을 시작합니다...")
-    
-    # 텔레그램 설정 로드
-    if 'TELEGRAM' in config:
-        bot_token = config.get('TELEGRAM', 'bot_token', fallback=None)
-        
-        if not bot_token:
-            logging.error("봇 토큰을 찾을 수 없습니다. config_home.ini 파일을 확인해주세요.")
-            return
-            
-        logging.info("✅ 텔레그램 설정이 성공적으로 로드되었습니다.")
-        
-        # 텔레그램 봇 초기화 및 시작
-        application = ApplicationBuilder().token(bot_token).build()
-        
-        # 명령어 핸들러 추가
-        start_handler = CommandHandler('start', start)
-        application.add_handler(start_handler)
-        
-        # 모든 텍스트 메시지를 처리하는 핸들러 추가 (명령어 제외)
-        message_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
-        application.add_handler(message_handler)
-        
-        # 봇 실행 시작 (무한 대기)
-        logging.info("🤖 봇이 메시지를 대기 중입니다. 텔레그램에서 '/start'를 입력해보세요.")
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
-        
-    else:
-        logging.warning("config_home.ini 파일에 [TELEGRAM] 섹션이 없습니다. 텔레그램 알림을 보내려면 이 섹션을 추가해야 합니다.")
-        
-    # PATHS 설정 로드
-    if 'PATHS' in config and 'BASE_PATH' in config['PATHS']:
-        base_path = config['PATHS']['BASE_PATH']
-        logging.info(f"📁 기본 경로 설정: {base_path}")
-    
+    print("\n--- [모든 프로세스 완료] ---")
+    print("성공적으로 프로젝트의 모든 작업을 완료했습니다. GitHub에 푸시할 준비가 되었습니다!")
+
 if __name__ == "__main__":
-    main()
+    run_project_automation()
