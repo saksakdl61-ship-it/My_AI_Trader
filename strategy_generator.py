@@ -7,9 +7,9 @@ class StrategyGenerator:
     """
     다양한 변수 조합으로 새로운 전략을 생성하고 파일에 저장하는 클래스입니다.
     """
-    def __init__(self):
-        self.output_file = "generated_strategies.txt"
-        self.num_strategies = 5000 # 한 번에 생성할 전략 수
+    def __init__(self, num_strategies=5000, output_file="generated_strategies.txt"):
+        self.num_strategies = num_strategies
+        self.output_file = output_file
         self.setup_logging()
 
     def setup_logging(self):
@@ -25,7 +25,7 @@ class StrategyGenerator:
             ]
         )
 
-    def generate_strategy(self):
+    def generate_strategies(self):
         """
         가상의 트레이딩 전략을 생성하고 파일에 저장합니다.
         """
@@ -47,14 +47,12 @@ class StrategyGenerator:
                 strategy_name = f"종목특성_{stock_type}_수익_{profit_target}%_손절_{stop_loss}%_물타기_{dollar_cost_average}"
                 f.write(f"{strategy_name}\n")
                 
+                # 진행 상황을 터미널에 실시간으로 표시
                 if (i + 1) % 50 == 0:
-                    logging.info(f"{i + 1}개의 전략이 생성되었습니다.")
-        
+                    percent_completed = (i + 1) / self.num_strategies * 100
+                    print(f"✅ {i + 1}/{self.num_strategies} 전략 생성 완료 ({percent_completed:.1f}%)", flush=True)
+
         logging.info(f"--- {self.num_strategies}개의 전략 생성이 완료되었습니다. '{self.output_file}'에 저장됨 ---")
         
         complete_message = f"🎉 모든 전략({self.num_strategies}개) 생성이 완료되었습니다!\n새로운 전략들이 '{self.output_file}' 파일에 저장되었습니다."
         print(f"\n{complete_message}")
-
-if __name__ == "__main__":
-    generator = StrategyGenerator()
-    generator.generate_strategy()
