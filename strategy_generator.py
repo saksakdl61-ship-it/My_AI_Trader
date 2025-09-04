@@ -25,7 +25,7 @@ class StrategyGenerator:
             ]
         )
 
-    def generate_strategies(self):
+    def generate_strategy(self):
         """
         가상의 트레이딩 전략을 생성하고 파일에 저장합니다.
         """
