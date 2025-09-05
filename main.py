@@ -90,22 +90,8 @@ if __name__ == "__main__":
         orchestrator.execute_workflow()
     except (ValueError, KeyError) as e:
         logging.critical(f"프로젝트 실행에 실패했습니다. 원인: {e}")
-```
 
-### 최종 변경점
 
-`_step_analyze_results` 메서드가 다음과 같이 최종적으로 변경되었습니다.
-
-**이전 코드:**
-```python
-def _step_analyze_results(self):
-    report_file_path = self.paths["report"]
-    analyzer = result_analyzer.ResultAnalyzer(str(report_file_path)) # 파일 경로 직접 전달
-    analyzer.display_ranking()
-```
-
-**새로운 코드 (최종):**
-```python
 def _step_analyze_results(self):
     # ResultAnalyzer 객체를 생성할 때, self.config를 인자로 전달합니다.
     analyzer = result_analyzer.ResultAnalyzer(config=self.config)
