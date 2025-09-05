@@ -59,7 +59,8 @@ class AIBacktester:
             for pt in profit_targets:
                 for sl in stop_losses:
                     for dca in dca_options:
-                        name = f"전략: 피보나치, 수익률 {int(pt*100)}%, 손절율 {int(sl*100)}%, 물타기 {bool(dca)}"
+                        # 전략 이름을 RSI 전략으로 변경
+                        name = f"전략: 단순 RSI, 수익률 {int(pt*100)}%, 손절율 {int(sl*100)}%, 물타기 {bool(dca)}"
                         self.strategy_combinations.append({'profit_target': pt, 'stop_loss': sl, 'buy_the_dip': dca, 'strategy_name': name})
             
             logging.info(f"✅ 백테스터 설정 완료. {len(self.strategy_combinations)}개의 전략 조합 생성.")
@@ -100,36 +101,20 @@ class AIBacktester:
         trade_log = []
         capital_history = [capital]
         
-        # 필요한 기술적 지표 계산 (매매 조건에서 제거되므로 주석 처리하거나 제거 가능)
+        # 필요한 기술적 지표 계산 (RSI만 사용)
         df.ta.rsi(append=True)
-        df.ta.macd(append=True)
         df.dropna(inplace=True)
         df.reset_index(drop=True, inplace=True)
 
-        for i in range(60, len(df)):
+        for i in range(len(df)):
             current_price = df['close'].iloc[i]
             
-            # --- 매수 조건 탐색 (피보나치 되돌림만 사용) ---
+            # --- 매수 조건 탐색 (단순 RSI) ---
             if position is None:
-                sub_df_for_fib = df.iloc[i-60:i]
-                fib_levels = self._calculate_fibonacci_levels(sub_df_for_fib)
+                rsi = df['RSI_14'].iloc[i]
                 
-                # 어떤 피보나치 레벨에서 신호가 감지되었는지 확인하고 기록
-                detected_fib_level = None
-                for level_name, level_price in fib_levels.items():
-                    if abs(current_price - level_price) / level_price < self.params['fib_threshold']:
-                        detected_fib_level = level_name
-                        break
-                
-                if detected_fib_level:
-                    # 피보나치 레벨 탐지 기록
-                    self.fib_log.setdefault(detected_fib_level, 0)
-                    self.fib_log[detected_fib_level] += 1
-                
-                is_fib_support = detected_fib_level is not None
-                
-                # 피보나치 지지선 근처에서 매수
-                if is_fib_support:
+                # RSI가 30 이하일 때 매수 (과매도 상태)
+                if rsi < 30:
                     buy_ratio = 0.5 if params['buy_the_dip'] else 1.0
                     quantity = (capital * buy_ratio) // current_price
                     if quantity > 0:
