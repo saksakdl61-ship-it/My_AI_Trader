@@ -48,6 +48,7 @@ class AIBacktester:
             # BACKTEST 파라미터 설정
             self.params['initial_capital'] = self.config.getfloat('BACKTEST', 'INITIAL_CAPITAL', fallback=10000000)
             self.params['fee_rate'] = self.config.getfloat('BACKTEST', 'FEE_RATE', fallback=0.00015)
+            self.params['fib_threshold'] = self.config.getfloat('BACKTEST', 'FIB_THRESHOLD', fallback=0.03)
 
             # STRATEGY_PARAMS 설정 (설정 파일에서 리스트를 읽어옴)
             profit_targets = [float(p.strip()) for p in self.config.get('STRATEGY_PARAMS', 'profit_targets').split(',')]
@@ -116,7 +117,7 @@ class AIBacktester:
                 # 어떤 피보나치 레벨에서 신호가 감지되었는지 확인하고 기록
                 detected_fib_level = None
                 for level_name, level_price in fib_levels.items():
-                    if abs(current_price - level_price) / level_price < 0.01:
+                    if abs(current_price - level_price) / level_price < self.params['fib_threshold']:
                         detected_fib_level = level_name
                         break
                 
