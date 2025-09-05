@@ -31,14 +31,18 @@ class AIBacktester:
         
         # 데이터 관리를 위한 DataManager 인스턴스 생성
         self.data_manager = DataManager(config)
+        
+        # 피보나치 레벨 기록을 위한 딕셔너리 추가
+        self.fib_log = {}
 
     def _configure(self):
         """설정 객체로부터 필요한 모든 값들을 불러와 클래스 내부 변수를 설정합니다."""
         logging.info("백테스터(AIBacktester) 설정 시작...")
         try:
             # PATHS 설정
-            base_path = Path(self.config.get('PATHS', 'BASE_PATH'))
+            base_path = Path(self.config.get('PATHS', 'base_path'))
             self.paths['report_file'] = base_path / self.config.get('PATHS', 'report_file')
+            self.paths['fib_analysis_file'] = base_path / "fib_analysis.txt" # 새로운 파일 경로 추가
             self.paths['report_file'].parent.mkdir(parents=True, exist_ok=True)
             
             # BACKTEST 파라미터 설정
@@ -54,7 +58,7 @@ class AIBacktester:
             for pt in profit_targets:
                 for sl in stop_losses:
                     for dca in dca_options:
-                        name = f"전략: 수익률 {int(pt*100)}%, 손절율 {int(sl*100)}%, 물타기 {bool(dca)}"
+                        name = f"전략: 피보나치, 수익률 {int(pt*100)}%, 손절율 {int(sl*100)}%, 물타기 {bool(dca)}"
                         self.strategy_combinations.append({'profit_target': pt, 'stop_loss': sl, 'buy_the_dip': dca, 'strategy_name': name})
             
             logging.info(f"✅ 백테스터 설정 완료. {len(self.strategy_combinations)}개의 전략 조합 생성.")
@@ -95,7 +99,7 @@ class AIBacktester:
         trade_log = []
         capital_history = [capital]
         
-        # 필요한 기술적 지표 계산
+        # 필요한 기술적 지표 계산 (매매 조건에서 제거되므로 주석 처리하거나 제거 가능)
         df.ta.rsi(append=True)
         df.ta.macd(append=True)
         df.dropna(inplace=True)
@@ -104,20 +108,27 @@ class AIBacktester:
         for i in range(60, len(df)):
             current_price = df['close'].iloc[i]
             
-            # 매수 조건 탐색
+            # --- 매수 조건 탐색 (피보나치 되돌림만 사용) ---
             if position is None:
                 sub_df_for_fib = df.iloc[i-60:i]
                 fib_levels = self._calculate_fibonacci_levels(sub_df_for_fib)
-                is_fib_support = any(abs(current_price - level) / level < 0.01 for level in fib_levels.values())
                 
-                rsi = df['RSI_14'].iloc[i]
-                macd_line = df['MACD_12_26_9'].iloc[i]
-                signal_line = df['MACDs_12_26_9'].iloc[i]
-                prev_macd = df['MACD_12_26_9'].iloc[i-1]
-                prev_signal = df['MACDs_12_26_9'].iloc[i-1]
-                is_rebound = (rsi <= 35) or (prev_macd < prev_signal and macd_line > signal_line)
-
-                if is_fib_support and is_rebound:
+                # 어떤 피보나치 레벨에서 신호가 감지되었는지 확인하고 기록
+                detected_fib_level = None
+                for level_name, level_price in fib_levels.items():
+                    if abs(current_price - level_price) / level_price < 0.01:
+                        detected_fib_level = level_name
+                        break
+                
+                if detected_fib_level:
+                    # 피보나치 레벨 탐지 기록
+                    self.fib_log.setdefault(detected_fib_level, 0)
+                    self.fib_log[detected_fib_level] += 1
+                
+                is_fib_support = detected_fib_level is not None
+                
+                # 피보나치 지지선 근처에서 매수
+                if is_fib_support:
                     buy_ratio = 0.5 if params['buy_the_dip'] else 1.0
                     quantity = (capital * buy_ratio) // current_price
                     if quantity > 0:
@@ -125,7 +136,7 @@ class AIBacktester:
                         capital -= cost
                         position = {'price': current_price, 'quantity': quantity, 'dca_done': False}
             
-            # 매도 또는 물타기 조건 탐색
+            # --- 매도 또는 물타기 조건 탐색 ---
             elif position is not None:
                 profit_rate = (current_price - position['price']) / position['price']
                 
@@ -166,6 +177,22 @@ class AIBacktester:
         
         return total_return, win_rate, mdd, len(trade_log)
 
+    def _write_fib_analysis(self):
+        """피보나치 되돌림 레벨 탐지 결과를 파일에 기록합니다."""
+        if not self.fib_log:
+            logging.info("⭐ 피보나치 되돌림 탐지 기록이 없어 분석을 건너뜁니다.")
+            return
+
+        sorted_fib_log = sorted(self.fib_log.items(), key=lambda item: item[1], reverse=True)
+        
+        with open(self.paths['fib_analysis_file'], "w", encoding="utf-8") as f:
+            f.write("--- 피보나치 되돌림 레벨 탐지 횟수 분석 ---\n")
+            for level, count in sorted_fib_log:
+                f.write(f"• {level}: {count}회 탐지\n")
+            f.write("\n")
+        
+        logging.info(f"✅ 피보나치 분석 결과가 '{self.paths['fib_analysis_file']}'에 저장되었습니다.")
+
     def run_backtest(self):
         """설정된 모든 전략 조합에 대해 백테스팅을 실행하고 결과를 저장합니다."""
         logging.info("🚀 AI 비서 전략 자동 탐색기 (피보나치 강화 v1)를 시작합니다...")
@@ -192,7 +219,7 @@ class AIBacktester:
                 all_stock_results = []
                 for j, code in enumerate(stock_codes):
                     if (j+1) % 200 == 0:
-                        logging.info(f"    ... {j+1}/{len(stock_codes)} 종목 처리 중 ...")
+                        logging.info(f"    ... {j+1}/{len(stock_codes)} 종목 처리 중 ...")
                     
                     df = self.data_manager.load_stock_data(code)
                     if df is None or len(df) < 100:
@@ -217,7 +244,11 @@ class AIBacktester:
                                    f"MDD: {avg_mdd:.2f}%\n")
                     report_file.write(result_line)
                     report_file.flush()
-
+                else:
+                    result_line = f"{strategy_name} -> 거래 없음 (No Trades Found)\n"
+                    report_file.write(result_line)
+                    report_file.flush()
+                    
                 elapsed_time = time.time() - start_time
                 avg_time_per_strategy = elapsed_time / (i + 1)
                 remaining_strategies = total_strategies - (i + 1)
@@ -225,5 +256,5 @@ class AIBacktester:
                 eta_formatted = str(timedelta(seconds=int(eta_seconds)))
                 logging.info(f"✅ 전략 백테스팅 완료. 남은 전략: {remaining_strategies}개, 예상 시간: {eta_formatted}")
         
+        self._write_fib_analysis() # 백테스팅 완료 후 분석 결과를 기록합니다.
         logging.info(f"🎉 모든 백테스팅 완료! 최종 결과는 '{self.paths['report_file']}'에 저장되었습니다.")
-
