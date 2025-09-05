@@ -7,10 +7,14 @@ class DataManager:
     """
     Manages loading, updating, and managing stock data.
     """
-    def __init__(self, config_path='config_home.ini'):
-        self.config = configparser.ConfigParser()
-        self.config.read(config_path, encoding='utf-8')
-        self.base_path = self.config['PATHS']['BASE_PATH']
+    def __init__(self, config):
+        """
+        configparser 객체를 직접 인수로 받아 초기화합니다.
+        """
+        self.config = config
+        
+        # configparser는 키를 소문자로 자동 변환하므로 'base_path'를 사용합니다.
+        self.base_path = self.config['PATHS']['base_path']
         self.data_path = os.path.join(self.base_path, "daily_price_fdr")
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
